@@ -1757,6 +1757,9 @@ bool ASTParser::ConvertDecorationsForVariable(uint32_t id,
             }
             attrs.Add(builder_.Binding(Source{}, AInt(deco[1])));
         }
+        if (deco[0] == uint32_t(spv::Decoration::InputAttachmentIndex)) {
+            attrs.Add(builder_.InputAttachmentIndex(Source{}, AInt(deco[1])));
+        }
         if (deco[0] == uint32_t(spv::Decoration::NonWritable)) {
             read_only_vars_.insert(id);
         }
@@ -2489,11 +2492,15 @@ const Type* ASTParser::GetHandleTypeForSpirvHandle(const spvtools::opt::Instruct
                        << raw_handle_type->PrettyPrint();
                 return nullptr;
             }
+            const auto dim_param = raw_handle_type->GetSingleWordInOperand(1);
             const auto sampled_param = raw_handle_type->GetSingleWordInOperand(5);
             const auto format_param = raw_handle_type->GetSingleWordInOperand(6);
-            // Only storage images have a format.
-            if ((format_param != uint32_t(spv::ImageFormat::Unknown)) ||
+            if (dim_param == uint32_t(spv::Dim::SubpassData)) {
+                Enable(wgsl::Extension::kChromiumInternalInputAttachments);
+                usage.AddInputAttachment();
+            } else if ((format_param != uint32_t(spv::ImageFormat::Unknown)) ||
                 sampled_param == 2 /* without sampler */) {
+                // Only storage images have a format.
                 // Get NonWritable and NonReadable attributes of the variable.
                 bool is_nonwritable = false;
                 bool is_nonreadable = false;
@@ -2572,15 +2579,17 @@ const Type* ASTParser::GetHandleTypeForSpirvHandle(const spvtools::opt::Instruct
         // WGSL storage textures are always formatted.  Unformatted textures are always sampled.
         if (usage.IsSampledTexture() || usage.IsStorageReadOnlyTexture() ||
             (uint32_t(image_type->format()) == uint32_t(spv::ImageFormat::Unknown))) {
-            // Make a sampled texture type.
-            auto* ast_sampled_component_type =
+            // Make an image texture type.
+            auto* ast_image_component_type =
                 ConvertType(raw_handle_type->GetSingleWordInOperand(0));
 
-            // Vulkan ignores the depth parameter on OpImage, so pay attention to the
-            // usage as well.  That is, it's valid for a Vulkan shader to use an
-            // OpImage variable with an OpImage*Dref* instruction.  In WGSL we must
-            // treat that as a depth texture.
-            if (image_type->depth() == 1 || usage.IsDepthTexture()) {
+            if (usage.IsInputAttachment()) {
+                ast_handle_type = ty_.InputAttachment(ast_image_component_type);
+            } else if (image_type->depth() == 1 || usage.IsDepthTexture()) {
+                // Vulkan ignores the depth parameter on OpImage, so pay attention to the
+                // usage as well.  That is, it's valid for a Vulkan shader to use an
+                // OpImage variable with an OpImage*Dref* instruction.  In WGSL we must
+                // treat that as a depth texture.
                 if (image_type->is_multisampled()) {
                     ast_handle_type = ty_.DepthMultisampledTexture(dim);
                 } else {
@@ -2593,9 +2602,9 @@ const Type* ASTParser::GetHandleTypeForSpirvHandle(const spvtools::opt::Instruct
                            << namer_.Name(obj.result_id()) << ": " << obj.PrettyPrint();
                 }
                 // Multisampled textures are never depth textures.
-                ast_handle_type = ty_.MultisampledTexture(dim, ast_sampled_component_type);
+                ast_handle_type = ty_.MultisampledTexture(dim, ast_image_component_type);
             } else {
-                ast_handle_type = ty_.SampledTexture(dim, ast_sampled_component_type);
+                ast_handle_type = ty_.SampledTexture(dim, ast_image_component_type);
             }
         } else {
             const auto access =
@@ -2733,9 +2742,20 @@ bool ASTParser::RegisterHandleUsage() {
                 switch (opcode(inst)) {
                         // Single texel reads and writes
 
-                    case spv::Op::OpImageRead:
-                        handle_usage_[get_image(inst)].AddStorageReadTexture();
-                        break;
+                    case spv::Op::OpImageRead: {
+                        auto image_inst = get_image(inst);
+                        auto image_inst_type = GetSpirvTypeForHandleOrHandleMemoryObjectDeclaration(*image_inst);
+                        if (image_inst_type == nullptr) {
+                            break;
+                        }
+                        auto dim = image_inst_type->GetSingleWordInOperand(1);
+                        if (dim == uint32_t(spv::Dim::SubpassData)) {
+                            Enable(wgsl::Extension::kChromiumInternalInputAttachments);
+                            handle_usage_[image_inst].AddInputAttachment();
+                        } else {
+                            handle_usage_[image_inst].AddStorageReadTexture();
+                        }
+                        break; }
                     case spv::Op::OpImageWrite:
                         handle_usage_[get_image(inst)].AddStorageWriteTexture();
                         break;

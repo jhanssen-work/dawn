@@ -131,6 +131,7 @@ core::type::TextureDimension EnumConverter::ToDim(spv::Dim dim, bool arrayed) {
         case spv::Dim::Dim1D:
             return core::type::TextureDimension::k1d;
         case spv::Dim::Dim2D:
+        case spv::Dim::SubpassData:
             return core::type::TextureDimension::k2d;
         case spv::Dim::Dim3D:
             return core::type::TextureDimension::k3d;

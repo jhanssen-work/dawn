@@ -60,6 +60,7 @@ TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::DepthMultisampledText
 TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::MultisampledTexture);
 TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::SampledTexture);
 TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::StorageTexture);
+TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::InputAttachment);
 TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::Named);
 TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::Alias);
 TINT_INSTANTIATE_TYPEINFO(tint::spirv::reader::ast_parser::Struct);
@@ -122,6 +123,10 @@ struct SampledTextureHasher {
 struct StorageTextureHasher {
     HashCode operator()(const StorageTexture& t) const { return Hash(t.dims, t.format, t.access); }
 };
+
+struct InputAttachmentHasher {
+    HashCode operator()(const InputAttachment& t) const { return Hash(t.type); }
+};
 }  // namespace
 
 // Equality operators
@@ -161,6 +166,9 @@ static bool operator==(const SampledTexture& a, const SampledTexture& b) {
 }
 static bool operator==(const StorageTexture& a, const StorageTexture& b) {
     return a.dims == b.dims && a.format == b.format;
+}
+static bool operator==(const InputAttachment& a, const InputAttachment& b) {
+    return a.type == b.type;
 }
 //! @endcond
 
@@ -303,6 +311,13 @@ ast::Type StorageTexture::Build(ProgramBuilder& b) const {
     return b.ty.storage_texture(dims, format, access);
 }
 
+InputAttachment::InputAttachment(const Type* t) : Base(core::type::TextureDimension::k2d), type(t) {}
+InputAttachment::InputAttachment(const InputAttachment&) = default;
+
+ast::Type InputAttachment::Build(ProgramBuilder& b) const {
+    return b.ty.input_attachment(type->Build(b));
+}
+
 Named::Named(Symbol n) : name(n) {}
 Named::Named(const Named&) = default;
 Named::~Named() = default;
@@ -364,6 +379,8 @@ struct TypeManager::State {
     UniqueAllocator<ast_parser::SampledTexture, SampledTextureHasher> sampled_textures_;
     /// Unique StorageTexture instances
     UniqueAllocator<ast_parser::StorageTexture, StorageTextureHasher> storage_textures_;
+    /// Unique InputAttachment instances
+    UniqueAllocator<ast_parser::InputAttachment, InputAttachmentHasher> input_attachments_;
 };
 
 const Type* Type::UnwrapPtr() const {
@@ -555,6 +572,10 @@ const ast_parser::SampledTexture* TypeManager::SampledTexture(core::type::Textur
     return state->sampled_textures_.Get(dims, ty);
 }
 
+const ast_parser::InputAttachment* TypeManager::InputAttachment(const Type* ty) {
+    return state->input_attachments_.Get(ty);
+}
+
 const ast_parser::StorageTexture* TypeManager::StorageTexture(core::type::TextureDimension dims,
                                                               core::TexelFormat fmt,
                                                               core::Access access) {
@@ -650,6 +671,12 @@ std::string SampledTexture::String() const {
 std::string StorageTexture::String() const {
     StringStream ss;
     ss << "texture_storage_" << dims << "<" << format << ", " << access << ">";
+    return ss.str();
+}
+
+std::string InputAttachment::String() const {
+    StringStream ss;
+    ss << "input_attachment<" << type << ">";
     return ss.str();
 }
 

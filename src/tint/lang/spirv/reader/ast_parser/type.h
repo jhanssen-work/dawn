@@ -469,6 +469,29 @@ struct StorageTexture final : public Castable<StorageTexture, Texture> {
     core::Access const access;
 };
 
+/// `input_attachment` type
+struct InputAttachment final : public Castable<InputAttachment, Texture> {
+    /// Constructor
+    /// @param t the input attachment type
+    InputAttachment(const Type* t);
+
+    /// Copy constructor
+    /// @param other the other type to copy
+    InputAttachment(const InputAttachment& other);
+
+    /// @param b the ProgramBuilder used to construct the AST types
+    /// @returns the constructed ast::Type node for the given type
+    ast::Type Build(ProgramBuilder& b) const override;
+
+#ifndef NDEBUG
+    /// @returns a string representation of the type, for debug purposes only
+    std::string String() const override;
+#endif  // NDEBUG
+
+    /// the input attachment type
+    Type const* const type;
+};
+
 /// Base class for named types
 struct Named : public Castable<Named, Type> {
     /// Constructor
@@ -632,6 +655,10 @@ class TypeManager {
     const ast_parser::StorageTexture* StorageTexture(core::type::TextureDimension d,
                                                      core::TexelFormat f,
                                                      core::Access a);
+    /// @param t the input attachment type
+    /// @return a InputAttachment type. Repeated calls with the same arguments will
+    /// return the same pointer.
+    const ast_parser::InputAttachment* InputAttachment(const Type* t);
 
   private:
     struct State;

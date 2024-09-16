@@ -5502,13 +5502,18 @@ bool FunctionEmitter::EmitImageAccess(const spvtools::opt::Instruction& inst) {
     // This is the SPIR-V operand index.  We're done with the first operand.
     uint32_t arg_index = 1;
 
-    // Push the coordinates operands.
-    auto coords = MakeCoordinateOperandsForImageAccess(inst);
-    if (coords.IsEmpty()) {
-        return false;
-    }
-    for (auto* coord : coords) {
-        args.Push(coord);
+    // SPIR-V bytecode always has a coord argument but the WGSL
+    // inputAttachmentLoad builtin has no such argument.
+    // So just skip over the argument if the texture type is InputAttachment.
+    if (!texture_type->Is<InputAttachment>()) {
+        // Push the coordinates operands.
+        auto coords = MakeCoordinateOperandsForImageAccess(inst);
+        if (coords.IsEmpty()) {
+            return false;
+        }
+        for (auto* coord : coords) {
+            args.Push(coord);
+        }
     }
     // Skip the coordinates operand.
     arg_index++;
@@ -5575,8 +5580,12 @@ bool FunctionEmitter::EmitImageAccess(const spvtools::opt::Instruction& inst) {
             break;
         case spv::Op::OpImageFetch:
         case spv::Op::OpImageRead:
-            // Read a single texel from a sampled or storage image.
-            builtin_name = "textureLoad";
+            // Read a single texel from a sampled, storage image or input attachment.
+            if (texture_type->Is<InputAttachment>()) {
+                builtin_name = "inputAttachmentLoad";
+            } else {
+                builtin_name = "textureLoad";
+            }
             use_level_of_detail_suffix = false;
             break;
         case spv::Op::OpImageWrite:
@@ -5652,7 +5661,7 @@ bool FunctionEmitter::EmitImageAccess(const spvtools::opt::Instruction& inst) {
         arg_index++;
     } else if ((op == spv::Op::OpImageFetch || op == spv::Op::OpImageRead) &&
                !texture_type
-                    ->IsAnyOf<DepthMultisampledTexture, MultisampledTexture, StorageTexture>()) {
+                    ->IsAnyOf<DepthMultisampledTexture, MultisampledTexture, StorageTexture, InputAttachment>()) {
         // textureLoad requires an explicit level-of-detail parameter for non-multisampled and
         // non-storage texture types.
         args.Push(parser_impl_.MakeNullValue(ty_.I32()));

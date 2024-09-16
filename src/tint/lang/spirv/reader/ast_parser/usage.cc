@@ -123,7 +123,7 @@ bool Usage::IsComplete() const {
         return true;
     }
     if (IsTexture()) {
-        return is_sampled_ || IsStorageTexture();
+        return is_sampled_ || is_input_attachment_ || IsStorageTexture();
     }
     return false;
 }
@@ -184,6 +184,11 @@ void Usage::AddMultisampledTexture() {
 void Usage::AddDepthTexture() {
     AddSampledTexture();
     is_depth_ = true;
+}
+
+void Usage::AddInputAttachment() {
+    AddTexture();
+    is_input_attachment_ = true;
 }
 
 std::string Usage::to_str() const {

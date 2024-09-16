@@ -78,6 +78,8 @@ class Usage {
     bool IsMultisampledTexture() const { return is_multisampled_; }
     /// @returns true if this usage is a dpeth texture usage.
     bool IsDepthTexture() const { return is_depth_; }
+    /// @returns true if this is an input attachment
+    bool IsInputAttachment() const { return is_input_attachment_; }
     /// @returns true if this usage is a read-only storage texture
     bool IsStorageReadOnlyTexture() const { return is_storage_read_ && !is_storage_write_; }
     /// @returns true if this usage is a read-write storage texture
@@ -119,6 +121,8 @@ class Usage {
     void AddMultisampledTexture();
     /// Records usage as a depth texture.
     void AddDepthTexture();
+    /// Records usage as an input attachment.
+    void AddInputAttachment();
 
     /// @returns this usage object as a string.
     std::string to_str() const;
@@ -138,6 +142,7 @@ class Usage {
     bool is_depth_ = false;
     bool is_storage_read_ = false;
     bool is_storage_write_ = false;
+    bool is_input_attachment_ = false;
 };
 
 /// Writes the Usage to the stream
